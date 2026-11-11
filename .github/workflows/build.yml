@@ -52,8 +52,17 @@ jobs:
       - name: Download iOS 16.5 SDK
         if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
-          curl -LO https://github.com/theos/sdks/releases/download/v2024.1/iPhoneOS16.5.sdk.tar.zst
-          tar --use-compress-program zstd -xf iPhoneOS16.5.sdk.tar.zst -C "$THEOS/sdks/"
+          mkdir -p "$THEOS/sdks"
+          git clone \
+            --filter=blob:none \
+            --no-checkout \
+            --depth=1 \
+            --sparse \
+            https://github.com/theos/sdks.git /tmp/theos-sdks
+          cd /tmp/theos-sdks
+          git sparse-checkout set iPhoneOS16.5.sdk
+          git checkout
+          cp -r iPhoneOS16.5.sdk "$THEOS/sdks/"
 
       # ── 7. Build ──────────────────────────────────────────────────────────────
       - name: Compile
