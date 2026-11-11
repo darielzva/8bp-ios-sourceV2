@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  THEOS: /usr/local/theos
+  THEOS: ${{ github.workspace }}/theos
 
 jobs:
   build:
@@ -31,7 +31,7 @@ jobs:
         id: cache-theos
         uses: actions/cache@v4
         with:
-          path: /usr/local/theos
+          path: ${{ github.workspace }}/theos
           key: theos-${{ runner.os }}-v1
 
       # ── 4. Instalar Theos ─────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ jobs:
         id: cache-sdk
         uses: actions/cache@v4
         with:
-          path: /usr/local/theos/sdks
+          path: ${{ github.workspace }}/theos/sdks
           key: theos-sdks-16.5-v1
 
       # ── 6. Descargar iOS SDK ──────────────────────────────────────────────────
@@ -53,7 +53,7 @@ jobs:
         if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
           curl -LO https://github.com/theos/sdks/releases/download/v2024.1/iPhoneOS16.5.sdk.tar.zst
-          tar --use-compress-program zstd -xf iPhoneOS16.5.sdk.tar.zst -C $THEOS/sdks/
+          tar --use-compress-program zstd -xf iPhoneOS16.5.sdk.tar.zst -C "$THEOS/sdks/"
 
       # ── 7. Build ──────────────────────────────────────────────────────────────
       - name: Compile
