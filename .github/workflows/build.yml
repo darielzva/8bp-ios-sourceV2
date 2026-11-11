@@ -8,6 +8,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+env:
+  THEOS: /usr/local/theos
+
 jobs:
   build:
     name: Compile 8Ball.dylib
@@ -18,30 +21,56 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Theos + iOS SDK ───────────────────────────────────────────────────
-      - name: Setup Theos
-        uses: theos/theos-action@v2
-        with:
-          sdk-version: '16.5'
-          cache: true
-          cache-id: theos-16.5
+      # ── 2. Dependencias brew ─────────────────────────────────────────────────
+      - name: Install dependencies
+        run: |
+          brew install ldid make dpkg
 
-      # ── 3. Build ─────────────────────────────────────────────────────────────
+      # ── 3. Cache Theos ───────────────────────────────────────────────────────
+      - name: Cache Theos
+        id: cache-theos
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/theos
+          key: theos-${{ runner.os }}-v1
+
+      # ── 4. Instalar Theos ─────────────────────────────────────────────────────
+      - name: Install Theos
+        if: steps.cache-theos.outputs.cache-hit != 'true'
+        run: |
+          git clone --recursive https://github.com/theos/theos.git $THEOS
+
+      # ── 5. Cache iOS SDK ──────────────────────────────────────────────────────
+      - name: Cache iOS SDK
+        id: cache-sdk
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/theos/sdks
+          key: theos-sdks-16.5-v1
+
+      # ── 6. Descargar iOS SDK ──────────────────────────────────────────────────
+      - name: Download iOS 16.5 SDK
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
+        run: |
+          curl -LO https://github.com/theos/sdks/releases/download/v2024.1/iPhoneOS16.5.sdk.tar.zst
+          tar --use-compress-program zstd -xf iPhoneOS16.5.sdk.tar.zst -C $THEOS/sdks/
+
+      # ── 7. Build ──────────────────────────────────────────────────────────────
       - name: Compile
         run: |
-          make package \
+          gmake package \
             ARCHS=arm64 \
             DEBUG=0 \
             FINALPACKAGE=1 \
             FOR_RELEASE=1 \
             THEOS_PACKAGE_SCHEME=rootless
 
-      # ── 4. Extraer dylib del .deb ─────────────────────────────────────────────
-      - name: Extract dylib from .deb
+      # ── 8. Extraer dylib del .deb ─────────────────────────────────────────────
+      - name: Extract dylib
         id: extract
         run: |
           DEB=$(find packages -name "*.deb" | head -1)
-          echo "Found deb: $DEB"
+          echo "deb: $DEB"
 
           mkdir -p /tmp/deb_extracted
           dpkg-deb -x "$DEB" /tmp/deb_extracted
@@ -49,17 +78,14 @@ jobs:
           DYLIB=$(find /tmp/deb_extracted -name "*.dylib" | head -1)
 
           if [ -z "$DYLIB" ]; then
-            echo "dpkg-deb fallback — trying .theos/obj/"
             DYLIB=$(find .theos/obj -name "*.dylib" 2>/dev/null | head -1)
           fi
 
-          echo "dylib=$DYLIB" >> "$GITHUB_OUTPUT"
           ls -lh "$DYLIB"
           file "$DYLIB"
-
           cp "$DYLIB" 8Ball.dylib
 
-      # ── 5. Upload dylib ───────────────────────────────────────────────────────
+      # ── 9. Upload dylib ───────────────────────────────────────────────────────
       - name: Upload dylib
         uses: actions/upload-artifact@v4
         with:
@@ -68,7 +94,7 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      # ── 6. Upload .deb también ────────────────────────────────────────────────
+      # ── 10. Upload .deb ───────────────────────────────────────────────────────
       - name: Upload .deb
         uses: actions/upload-artifact@v4
         with:
@@ -77,7 +103,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-      # ── 7. Release en tag v* ──────────────────────────────────────────────────
+      # ── 11. Release en tag v* ─────────────────────────────────────────────────
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
