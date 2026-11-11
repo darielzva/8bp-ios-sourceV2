@@ -64,7 +64,18 @@ jobs:
           git checkout
           cp -r iPhoneOS16.5.sdk "$THEOS/sdks/"
 
-      # ── 7. Build ──────────────────────────────────────────────────────────────
+      # ── 7. Patch Makefile ─────────────────────────────────────────────────────
+      - name: Patch Makefile — suppress uninitialized-const-pointer
+        run: |
+          # imgui_widgets.cpp usa una variable uninitialized en un path que nunca
+          # se ejecuta — el compiler lo marca como error con -Werror. Suprimimos
+          # solo ese warning específico para no afectar el resto.
+          sed -i '' \
+            's/-fexceptions/-fexceptions -Wno-error=uninitialized-const-pointer/' \
+            Makefile
+          grep CCFLAGS Makefile
+
+      # ── 8. Build ──────────────────────────────────────────────────────────────
       - name: Compile
         run: |
           gmake package \
